@@ -11,6 +11,7 @@ public class RankingBars : MonoBehaviour
     public float arcDegrees = 170f;     // angular spread; wider = more spacing between bars
     public float maxHeight = 2.5f;      // height of the #1 bar (m)
     public float barWidth = 0.3f;
+    public float baseY = 0f;            // floor level of the bar bases (PIC 2: RoomLayout sets it)
     public bool useLog = false;         // false = linear (honest), true = log
     public float labelCharSize = 0.014f;
     public float baseLift = 0.35f;      // gap between the bar top and the lowest label level (m)
@@ -60,7 +61,7 @@ public class RankingBars : MonoBehaviour
 
         Vector3 center = viewer != null ? viewer.position : transform.position;
         Vector3 eye = viewer != null ? viewer.position : center + Vector3.up * 1.6f;
-        float baseY = 0f; // floor level; adjust to match the floor in PIC 2's scene
+        // baseY is a public field now (see above)
 
         for (int i = 0; i < ev.Length; i++)
         {
