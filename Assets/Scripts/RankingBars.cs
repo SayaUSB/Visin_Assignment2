@@ -16,12 +16,27 @@ public class RankingBars : MonoBehaviour
     public float labelCharSize = 0.014f;
     public float baseLift = 0.35f;      // gap between the bar top and the lowest label level (m)
     public float levelHeight = 0.6f;    // height difference between label levels (m)
-    public int levels = 3;              // labels cycle through this many heights so neighbours never share one
+    public int levels = 3;              // (no longer used: all labels now share one row)
+
+    [Header("Fixed position (does not follow the camera)")]
+    public bool staticAnchor = true;    // true = the arc is centred on 'anchorPosition', moving the camera does not move the bars
+    public Vector3 anchorPosition = new Vector3(0f, 1.6f, -11.59f); // centre of the arc and the point the labels face
+    public float labelGap = 0.35f;      // gap between the top of the tallest bar and the bottom of the label row (m)
 
     static readonly string[] Months =
         { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
     void Start() { Rebuild(); } // always rebuilds, so objects saved in Edit mode never duplicate
+
+    // Right-click the component header -> "Anchor = viewer position" after moving the camera,
+    // to pin the bars to the camera's new position.
+    [ContextMenu("Anchor = viewer position")]
+    public void AnchorToViewer()
+    {
+        if (viewer == null) return;
+        anchorPosition = viewer.position;
+        Rebuild();
+    }
 
     // Right-click the component header -> "Rebuild" to preview in Edit mode
     [ContextMenu("Rebuild")]
@@ -59,8 +74,17 @@ public class RankingBars : MonoBehaviour
         float maxVal = 0f;
         foreach (var e in ev) maxVal = Mathf.Max(maxVal, e.impact_e);
 
-        Vector3 center = viewer != null ? viewer.position : transform.position;
-        Vector3 eye = viewer != null ? viewer.position : center + Vector3.up * 1.6f;
+        Vector3 center = staticAnchor ? anchorPosition : (viewer != null ? viewer.position : transform.position);
+        Vector3 eye = staticAnchor ? anchorPosition : (viewer != null ? viewer.position : center + Vector3.up * 1.6f);
+
+        // Label size: shrink only if the labels of two neighbouring bars would touch
+        // (the row of labels is at ONE height, so they must fit side by side).
+        float spacing = ev.Length > 1
+            ? 2f * radius * Mathf.Sin(Mathf.Deg2Rad * arcDegrees / (2f * (ev.Length - 1)))
+            : 10f;
+        float cs = Mathf.Min(labelCharSize, 0.9f * spacing / 12f); // widest label line ~ 12 x characterSize
+        float labelHalfH = cs * 8f;                                // 4 lines x 4 x characterSize / 2
+        float rowY = baseY + maxHeight + labelGap + labelHalfH;    // the same height for every label
         // baseY is a public field now (see above)
 
         for (int i = 0; i < ev.Length; i++)
@@ -90,16 +114,17 @@ public class RankingBars : MonoBehaviour
             SplitDate(e.date, out string dayMonth, out string year);
             string txt = $"#{e.rank}\n{dayMonth}\n{year}\n{e.impact_e:0.#} kt";
 
-            // Labels cycle through several heights, so neighbours are never at the same height
-            int level = (e.rank - 1) % Mathf.Max(1, levels);
+            // All labels in one row at the same height, above the tallest bar
             Vector3 barTop = basePos + Vector3.up * h;
-            Vector3 labelPos = barTop + Vector3.up * (baseLift + level * levelHeight);
+            Vector3 labelPos = new Vector3(basePos.x, rowY, basePos.z);
 
-            var tm = FireballPalette.MakeLabel(txt, labelPos, transform, labelCharSize);
-            tm.transform.rotation = Quaternion.LookRotation(labelPos - eye);
+            var tm = FireballPalette.MakeLabel(txt, labelPos, transform, cs);
+            Vector3 face = labelPos - eye; face.y = 0f; // upright text, facing away from the reader
+            if (face.sqrMagnitude < 1e-4f) face = Vector3.forward;
+            tm.transform.rotation = Quaternion.LookRotation(face);
 
-            // Thin leader line from the bar top to the bottom of its label
-            MakeLeader(barTop, labelPos - Vector3.up * 0.28f);
+            // Thin leader line from the bar top up to the bottom of its label
+            MakeLeader(barTop, labelPos - Vector3.up * (labelHalfH + 0.02f));
         }
     }
 

@@ -86,6 +86,8 @@ public class RoomLayout : MonoBehaviour
             var v = v1BarChart;
             if (v.clock != 12) Debug.LogWarning("RoomLayout: RankingBars is always centred on 12 o'clock; clock " + v.clock + " is ignored for V1");
             rankingBars.viewer = viewer;
+            rankingBars.staticAnchor = true;
+            rankingBars.anchorPosition = viewer.position;
             rankingBars.radius = v.distanceM;
             float span = Mathf.Max(0.1f, v.widthM - rankingBars.barWidth); // bar centres, so the outer edges reach widthM
             rankingBars.arcDegrees = 2f * Mathf.Asin(Mathf.Clamp01(span / (2f * v.distanceM))) * Mathf.Rad2Deg;

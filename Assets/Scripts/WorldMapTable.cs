@@ -28,7 +28,8 @@ public class WorldMapTable : MonoBehaviour
     public float topMarkerSize = 0.075f;      // diameter of a top-10 marker (m)
     public float contextMarkerSize = 0.02f;   // diameter of the other events (m)
     public float rankLabelCharSize = 0.03f;   // "#rank" label above each top-10 marker
-    public float coordLabelCharSize = 0.018f; // coordinates line under the rank label
+    public bool showCoordinateLabels = true;  // lat/lon text above each marker
+    public float coordLabelCharSize = 0.018f; // size of that coordinates line, if shown
 
     static readonly Color FrameColor = new Color32(92, 102, 116, 255);
     static readonly Color LegColor   = new Color32(66, 75, 88, 255);
@@ -37,10 +38,25 @@ public class WorldMapTable : MonoBehaviour
     static readonly Color TextMain   = new Color32(235, 240, 245, 255);
     static readonly Color TextDim    = new Color32(190, 202, 216, 255);
 
+    readonly List<Transform> faceReader = new List<Transform>(); // labels that turn towards the reader
+
     void Start() { Rebuild(); } // always rebuilds, so objects saved in Edit mode never duplicate
 
+    // Labels stay upright and keep facing the reader while the reader turns the head.
+    void LateUpdate()
+    {
+        if (!Application.isPlaying || viewer == null) return;
+        Vector3 eye = viewer.position;
+        foreach (var t in faceReader)
+        {
+            if (t == null) continue;
+            Vector3 f = t.position - eye; f.y = 0f;
+            if (f.sqrMagnitude > 1e-4f) t.rotation = Quaternion.LookRotation(f, Vector3.up);
+        }
+    }
+
     [ContextMenu("Rebuild")]
-    public void Rebuild() { Clear(); Build(); }
+    public void Rebuild() { Clear(); faceReader.Clear(); Build(); }
 
     [ContextMenu("Clear")]
     public void Clear() { Pic2Util.ClearChildren(transform); }
@@ -50,6 +66,15 @@ public class WorldMapTable : MonoBehaviour
     {
         return Fmt(Mathf.Abs(lat), "0.0") + "°" + (lat >= 0 ? "N" : "S") + " " +
                Fmt(Mathf.Abs(lon), "0.0") + "°" + (lon >= 0 ? "E" : "W");
+    }
+
+    void AddLabel(string text, Vector3 worldPos, float charSize, Color color, Vector3 eye)
+    {
+        var tm = FireballPalette.MakeLabel(text, worldPos, transform, charSize, color);
+        Vector3 f = worldPos - eye; f.y = 0f;
+        if (f.sqrMagnitude < 1e-4f) f = transform.forward;
+        tm.transform.rotation = Quaternion.LookRotation(f, Vector3.up);
+        faceReader.Add(tm.transform);
     }
 
     // x = lon/180 * W/2 , z = lat/90 * D/2  (local to the map), y = height above the floor
@@ -148,7 +173,8 @@ public class WorldMapTable : MonoBehaviour
                 Pic2Util.MakeUnlit(FireballPalette.ForRank(e.rank)));
 
             // "#rank" + coordinates above the marker, with a thin leader line
-            float rankH = rankLabelCharSize * 4f, coordH = coordLabelCharSize * 4f;
+            float rankH = rankLabelCharSize * 4f;
+            float coordH = showCoordinateLabels ? coordLabelCharSize * 4f : 0f;
             float lift = 0.10f + (i % 3) * (rankH + coordH + 0.04f);
             Vector3 markTop = c + Vector3.up * (m * 0.6f);
             Vector3 coordPos = markTop + Vector3.up * (lift + coordH * 0.5f);
@@ -157,10 +183,10 @@ public class WorldMapTable : MonoBehaviour
             if (leaderLen > 0.01f)
                 Pic2Util.Prim(PrimitiveType.Cube, "Leader_" + e.rank, transform,
                     markTop + Vector3.up * (leaderLen * 0.5f), new Vector3(0.004f, leaderLen, 0.004f), leaderMat);
-            var tr = FireballPalette.MakeLabel("#" + e.rank, rankPos, transform, rankLabelCharSize, TextMain);
-            tr.transform.rotation = Quaternion.LookRotation(rankPos - eye);
-            var tc = FireballPalette.MakeLabel(Coord(e.latitude, e.longitude), coordPos, transform, coordLabelCharSize, TextDim);
-            tc.transform.rotation = Quaternion.LookRotation(coordPos - eye);
+            // positions above are LOCAL to the map; MakeLabel wants WORLD positions
+            AddLabel("#" + e.rank, transform.TransformPoint(rankPos), rankLabelCharSize, TextMain, eye);
+            if (showCoordinateLabels)
+                AddLabel(Coord(e.latitude, e.longitude), transform.TransformPoint(coordPos), coordLabelCharSize, TextDim, eye);
         }
     }
 }
